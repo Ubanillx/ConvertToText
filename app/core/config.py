@@ -41,9 +41,6 @@ class Settings(BaseSettings):
     baidu_ocr_secret_key: str = "ikpwppZUSggGpJOEvskp1PfDkpRjd54O"
     baidu_ocr_enabled: bool = True
     
-    # LangChain配置
-    langchain_verbose: bool = False
-    langchain_cache: bool = True
     
     # OpenAI配置（备用）
     openai_api_key: Optional[str] = None

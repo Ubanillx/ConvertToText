@@ -93,7 +93,6 @@ graph TB
         K --> P[百度OCR API]
         K --> Q[Tesseract OCR]
         L --> R[Qwen-VL模型]
-        L --> S[LangChain处理]
     end
   
     subgraph "存储层"
@@ -214,7 +213,6 @@ python main.py
 | **PDF处理**  | `/api/v1/pdf/extract-text`       | POST | PDF文字提取      |
 | **DOC处理**  | `/api/v1/doc/extract-text`       | POST | DOC/DOCX文字提取 |
 | **OCR识别**  | `/api/v1/ocr/recognize`          | POST | 图片文字识别     |
-| **AI处理**   | `/api/v1/langchain/text/process` | POST | 智能文本处理     |
 | **文件下载** | `/api/v1/download/{file_id}`     | GET  | 结果文件下载     |
 
 ### 使用示例

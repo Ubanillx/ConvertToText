@@ -46,7 +46,7 @@ echo "🔧 检查环境配置..."
 # 检查必要的环境变量
 if [ -z "$DASHSCOPE_API_KEY" ]; then
     echo "⚠️  警告: 未设置 DASHSCOPE_API_KEY 环境变量"
-    echo "LangChain 功能可能无法正常工作"
+    echo "Qwen-VL 功能可能无法正常工作"
 fi
 
 if [ -z "$OPENAI_API_KEY" ]; then
