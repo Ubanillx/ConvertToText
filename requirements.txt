@@ -1,0 +1,58 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-multipart==0.0.6
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+httpx==0.25.2
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+isort==5.12.0
+flake8==6.1.0
+mypy==1.7.1
+PyMuPDF==1.23.14
+reportlab==4.0.7
+
+# LangChain相关依赖
+langchain>=0.1.0
+langchain-community>=0.0.10
+langchain-core>=0.1.28
+langchain-text-splitters>=0.0.1
+langchain-experimental>=0.0.47
+
+# 百炼平台相关依赖
+dashscope==1.14.1
+
+# Qwen-VL多模态模型依赖
+Pillow>=9.0.0
+
+# 其他AI相关依赖
+openai==1.3.7
+tiktoken==0.5.2
+numpy>=1.24,<2.0
+pandas==2.0.3
+
+# 计算机视觉相关依赖
+opencv-python>=4.5,<4.10
+
+# PaddleOCR依赖已移除
+# 表格识别依赖
+openpyxl>=3.1.0
+# 公式识别依赖
+latex2mathml>=3.76.0
+
+# DOC/DOCX文档处理依赖
+python-docx>=0.8.11
+python-docx2txt>=0.8
+antiword>=0.37
+catdoc>=0.95
+
+# 注意：以下依赖在macOS上可能有问题，已注释
+# PP-StructureV3文档解析依赖
+# paddlex依赖已移除
+# 文档结构分析相关依赖
+# layoutparser>=0.3.4
+# detectron2>=0.6  # 在macOS上安装困难

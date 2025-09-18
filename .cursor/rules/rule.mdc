@@ -1,0 +1,6 @@
+---
+alwaysApply: true
+---
+
+project use conda as requirement management 
+conda activate convert-to-text 
