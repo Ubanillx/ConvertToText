@@ -33,6 +33,7 @@ pandas==2.0.3
 
 # 计算机视觉相关依赖
 opencv-python>=4.5,<4.10
+pytesseract>=0.3.10
 
 # PaddleOCR依赖已移除
 # 表格识别依赖

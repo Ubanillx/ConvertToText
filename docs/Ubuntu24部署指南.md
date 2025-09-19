@@ -7,12 +7,14 @@
 ## 🎯 系统要求
 
 ### 硬件要求
+
 - **CPU**: 2核心以上（推荐4核心）
 - **内存**: 最小4GB，推荐8GB+
 - **存储**: 最小20GB可用空间
 - **网络**: 稳定的互联网连接（用于AI服务调用）
 
 ### 软件要求
+
 - **操作系统**: Ubuntu 24.04 LTS
 - **Python**: 3.8+ （推荐3.9或3.10）
 - **Conda**: Miniconda或Anaconda
@@ -23,6 +25,7 @@
 ### 第一步：系统环境准备
 
 #### 1.1 更新系统包
+
 ```bash
 # 更新包列表
 sudo apt update && sudo apt upgrade -y
@@ -32,6 +35,7 @@ sudo apt install -y curl wget git vim build-essential
 ```
 
 #### 1.2 安装Python和Conda
+
 ```bash
 # 安装Python开发工具
 sudo apt install -y python3.10 python3.10-dev python3.10-venv python3-pip
@@ -48,23 +52,31 @@ source ~/.bashrc
 ```
 
 #### 1.3 安装系统级依赖
+
 ```bash
 # 安装Tesseract OCR
 sudo apt install -y tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng
 
-# 安装图像处理依赖
-sudo apt install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev libgomp1
+# 安装图像处理依赖 (Ubuntu 24.04兼容)
+sudo apt install -y libgl1-mesa-glx libglib2.0-0t64 libsm6 libxext6 libxrender-dev libgomp1
+
+# 如果libgl1-mesa-glx不可用，尝试替代方案
+sudo apt install -y libgl1-mesa-dri libgl1-mesa-dev || sudo apt install -y libgl1
 
 # 安装OpenCV依赖
 sudo apt install -y libopencv-dev python3-opencv
 
 # 安装其他必要依赖
 sudo apt install -y libffi-dev libssl-dev libxml2-dev libxslt1-dev zlib1g-dev
+
+# 安装额外的图像处理库
+sudo apt install -y libjpeg-dev libpng-dev libtiff-dev libwebp-dev
 ```
 
 ### 第二步：项目部署
 
 #### 2.1 克隆项目代码
+
 ```bash
 # 创建项目目录
 sudo mkdir -p /opt/convert-to-text
@@ -77,6 +89,7 @@ git clone https://github.com/your-username/ConvertToText.git .
 ```
 
 #### 2.2 创建Conda环境
+
 ```bash
 # 创建专用环境
 conda create -n convert-to-text python=3.10 -y
@@ -88,6 +101,7 @@ which python
 ```
 
 #### 2.3 安装Python依赖
+
 ```bash
 # 升级pip
 pip install --upgrade pip
@@ -102,6 +116,7 @@ python -c "import fastapi, uvicorn, dashscope, cv2, pytesseract; print('核心�
 ### 第三步：配置设置
 
 #### 3.1 创建环境配置文件
+
 ```bash
 # 创建.env配置文件
 cat > .env << 'EOF'
@@ -137,6 +152,7 @@ EOF
 ```
 
 #### 3.2 创建必要目录
+
 ```bash
 # 创建存储目录
 mkdir -p storage/{uploads,temp,results}
@@ -147,6 +163,7 @@ chmod 755 storage storage/* logs
 ```
 
 #### 3.3 配置系统服务（可选）
+
 ```bash
 # 创建systemd服务文件
 sudo tee /etc/systemd/system/convert-to-text.service > /dev/null << 'EOF'
@@ -175,6 +192,7 @@ sudo systemctl daemon-reload
 ### 第四步：启动和验证
 
 #### 4.1 手动启动测试
+
 ```bash
 # 激活环境
 conda activate convert-to-text
@@ -184,6 +202,7 @@ python main.py
 ```
 
 #### 4.2 验证服务运行
+
 ```bash
 # 在另一个终端测试服务
 curl http://localhost:8000/api/v1/health
@@ -193,6 +212,7 @@ curl http://localhost:8000/docs
 ```
 
 #### 4.3 使用systemd服务（推荐生产环境）
+
 ```bash
 # 启动服务
 sudo systemctl start convert-to-text
@@ -211,25 +231,26 @@ sudo journalctl -u convert-to-text -f
 
 ### 必需配置项
 
-| 配置项 | 说明 | 获取方式 |
-|--------|------|----------|
-| `DASHSCOPE_API_KEY` | 阿里云百炼平台API密钥 | [百炼平台控制台](https://dashscope.aliyun.com/) |
-| `BAIDU_OCR_API_KEY` | 百度OCR API密钥 | [百度智能云控制台](https://cloud.baidu.com/) |
-| `BAIDU_OCR_SECRET_KEY` | 百度OCR Secret密钥 | [百度智能云控制台](https://cloud.baidu.com/) |
+| 配置项                   | 说明                  | 获取方式                                     |
+| ------------------------ | --------------------- | -------------------------------------------- |
+| `DASHSCOPE_API_KEY`    | 阿里云百炼平台API密钥 | [百炼平台控制台](https://dashscope.aliyun.com/) |
+| `BAIDU_OCR_API_KEY`    | 百度OCR API密钥       | [百度智能云控制台](https://cloud.baidu.com/)    |
+| `BAIDU_OCR_SECRET_KEY` | 百度OCR Secret密钥    | [百度智能云控制台](https://cloud.baidu.com/)    |
 
 ### 可选配置项
 
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `OPENAI_API_KEY` | None | OpenAI API密钥（备用） |
-| `HOST` | 0.0.0.0 | 服务监听地址 |
-| `PORT` | 8000 | 服务端口 |
-| `MAX_FILE_SIZE` | 100MB | 最大文件大小 |
-| `FILE_RETENTION_DAYS` | 7 | 文件保留天数 |
+| 配置项                  | 默认值  | 说明                   |
+| ----------------------- | ------- | ---------------------- |
+| `OPENAI_API_KEY`      | None    | OpenAI API密钥（备用） |
+| `HOST`                | 0.0.0.0 | 服务监听地址           |
+| `PORT`                | 8000    | 服务端口               |
+| `MAX_FILE_SIZE`       | 100MB   | 最大文件大小           |
+| `FILE_RETENTION_DAYS` | 7       | 文件保留天数           |
 
 ## 🧪 功能测试
 
 ### 基础功能测试
+
 ```bash
 # 1. 健康检查
 curl -X GET "http://localhost:8000/api/v1/health"
@@ -250,6 +271,7 @@ curl -X POST "http://localhost:8000/api/image/extract-text" \
 ```
 
 ### 性能测试
+
 ```bash
 # 使用ab进行简单性能测试
 sudo apt install -y apache2-utils
@@ -261,6 +283,7 @@ ab -n 100 -c 10 http://localhost:8000/api/v1/health
 ## 🔍 监控和日志
 
 ### 日志查看
+
 ```bash
 # 查看应用日志
 tail -f logs/app.log
@@ -273,6 +296,7 @@ htop
 ```
 
 ### 服务监控
+
 ```bash
 # 检查服务状态
 sudo systemctl status convert-to-text
@@ -289,6 +313,7 @@ ps aux | grep python
 ### 常见问题及解决方案
 
 #### 1. Conda环境激活失败
+
 ```bash
 # 问题：conda activate命令不识别
 # 解决：重新初始化conda
@@ -297,6 +322,7 @@ source ~/.bashrc
 ```
 
 #### 2. Python依赖安装失败
+
 ```bash
 # 问题：某些包安装失败
 # 解决：使用conda安装系统级依赖
@@ -306,7 +332,22 @@ conda install -c conda-forge opencv tesseract
 sudo apt install -y python3-opencv python3-tesseract
 ```
 
+#### 2.1 Ubuntu 24.04包名变化问题
+
+```bash
+# 问题：libgl1-mesa-glx包不存在
+# 解决：使用Ubuntu 24.04兼容的包名
+sudo apt install -y libgl1-mesa-dri libgl1-mesa-dev
+
+# 或者安装libgl1替代
+sudo apt install -y libgl1
+
+# 检查可用的OpenGL相关包
+apt search libgl1-mesa
+```
+
 #### 3. Tesseract OCR不可用
+
 ```bash
 # 问题：pytesseract找不到tesseract
 # 解决：安装tesseract并配置路径
@@ -316,6 +357,7 @@ tesseract --version
 ```
 
 #### 4. 内存不足
+
 ```bash
 # 问题：处理大文件时内存不足
 # 解决：增加swap空间
@@ -326,6 +368,7 @@ sudo swapon /swapfile
 ```
 
 #### 5. 端口被占用
+
 ```bash
 # 问题：8000端口被占用
 # 解决：修改配置或杀死占用进程
@@ -335,6 +378,7 @@ sudo kill -9 <PID>
 ```
 
 ### 日志分析
+
 ```bash
 # 查看错误日志
 grep -i error logs/app.log
@@ -349,6 +393,7 @@ grep "2024-01-01" logs/app.log
 ## 🔒 安全配置
 
 ### 防火墙设置
+
 ```bash
 # 安装ufw防火墙
 sudo apt install -y ufw
@@ -364,6 +409,7 @@ sudo ufw enable
 ```
 
 ### SSL/TLS配置（生产环境）
+
 ```bash
 # 使用nginx作为反向代理
 sudo apt install -y nginx
@@ -373,7 +419,7 @@ sudo tee /etc/nginx/sites-available/convert-to-text > /dev/null << 'EOF'
 server {
     listen 80;
     server_name your-domain.com;
-    
+  
     location / {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
@@ -393,6 +439,7 @@ sudo systemctl restart nginx
 ## 📊 性能优化
 
 ### 系统优化
+
 ```bash
 # 调整文件描述符限制
 echo "* soft nofile 65536" | sudo tee -a /etc/security/limits.conf
@@ -404,6 +451,7 @@ sudo sysctl -p
 ```
 
 ### 应用优化
+
 ```bash
 # 使用gunicorn作为WSGI服务器（生产环境）
 pip install gunicorn
@@ -427,6 +475,7 @@ gunicorn -c gunicorn.conf.py main:app
 ## 🔄 更新和维护
 
 ### 代码更新
+
 ```bash
 # 停止服务
 sudo systemctl stop convert-to-text
@@ -447,6 +496,7 @@ sudo systemctl start convert-to-text
 ```
 
 ### 定期维护
+
 ```bash
 # 创建维护脚本
 cat > /opt/convert-to-text/maintenance.sh << 'EOF'
