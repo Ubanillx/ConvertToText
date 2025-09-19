@@ -326,10 +326,13 @@ class PDFTextExtractor:
             if ocr_texts:
                 combined_text += "\n\n[图像文字识别结果]\n" + "\n".join(ocr_texts)
             
+            # 应用用户友好的文本格式化
+            formatted_text = self._format_user_friendly_text(combined_text)
+            
             return {
                 "page_number": page_num + 1,
-                "text": combined_text,
-                "text_length": len(combined_text.strip()),
+                "text": formatted_text,
+                "text_length": len(formatted_text.strip()),
                 "images_count": len(image_list),
                 "processing_type": "mixed_content",
                 "extraction_method": "native_text_with_ocr",
@@ -464,10 +467,13 @@ class PDFTextExtractor:
                 text = self._fuse_ocr_and_llm_results(text, llm_result)
                 extraction_method = "ocr_llm_fusion"
             
+            # 应用用户友好的文本格式化
+            formatted_text = self._format_user_friendly_text(text)
+            
             return {
                 "page_number": page_num + 1,
-                "text": text,
-                "text_length": len(text.strip()),
+                "text": formatted_text,
+                "text_length": len(formatted_text.strip()),
                 "images_count": len(image_list),
                 "processing_type": processing_type,
                 "extraction_method": extraction_method,
@@ -748,16 +754,15 @@ class PDFTextExtractor:
                 logger.info(f"第{page_num + 1}页使用Qwen-VL结果")
                 return vision_text, "vision_only", "vision_processed"
             else:
-                # 两者都失败
+                # 两者都失败 - 返回空字符串，让上层过滤机制处理
                 ocr_error = ocr_result.get('error', '未执行') if ocr_result else '未执行'
                 vision_error = vision_result.get('error', '未执行') if vision_result else '未执行'
-                error_msg = f"[处理失败] OCR: {ocr_error}, Qwen-VL: {vision_error}"
                 logger.warning(f"第{page_num + 1}页OCR和Qwen-VL都失败 - OCR: {ocr_error}, Vision: {vision_error}")
-                return error_msg, "both_failed", "error"
+                return "", "both_failed", "error"
                 
         except Exception as e:
             logger.error(f"融合决策模块失败: {str(e)}")
-            return f"[融合决策失败: {str(e)}]", "fusion_error", "error"
+            return "", "fusion_error", "error"
     
     def _intelligent_fusion(self, ocr_text: str, vision_text: str, 
                            ocr_confidence: float, vision_confidence: float, 
@@ -934,6 +939,77 @@ class PDFTextExtractor:
         except Exception as e:
             logger.error(f"Qwen-VL增强失败: {str(e)}")
             return vision_text
+    
+    def _format_user_friendly_text(self, text: str) -> str:
+        """
+        格式化用户友好的文本，过滤技术细节和失败信息
+        
+        Args:
+            text: 原始文本
+            
+        Returns:
+            格式化后的用户友好文本
+        """
+        try:
+            if not text or not text.strip():
+                return ""
+            
+            # 过滤失败信息和技术细节
+            failure_patterns = [
+                r'\[处理失败\].*',
+                r'\[融合决策失败\].*',
+                r'\[.*处理失败.*\].*',
+                r'OCR:.*未执行.*',
+                r'Qwen-VL:.*未执行.*',
+                r'\[.*识别结果.*\].*',
+                r'\[.*补充信息.*\].*',
+                r'\[.*增强结果.*\].*',
+                r'\[.*识别失败.*\].*',
+                r'\[.*处理异常.*\].*'
+            ]
+            
+            import re
+            filtered_text = text
+            for pattern in failure_patterns:
+                filtered_text = re.sub(pattern, '', filtered_text, flags=re.IGNORECASE)
+            
+            # 清理多余的空行和换行符
+            lines = [line.strip() for line in filtered_text.split('\n') if line.strip()]
+            
+            # 过滤无意义的文本
+            meaningful_lines = []
+            for line in lines:
+                # 过滤过短的文本
+                if len(line) < 3:
+                    continue
+                
+                # 过滤纯数字或纯符号
+                if re.match(r'^[\d\s\-_\.]+$', line):
+                    continue
+                
+                # 过滤重复的文本（如"奖牌"重复很多次）
+                if len(set(line.split())) == 1 and len(line.split()) > 2:
+                    continue
+                
+                # 过滤"图中没有可见文字"等无意义内容
+                if any(phrase in line for phrase in ['图中没有可见文字', '无', '图中所有可见文字：', '图中所有文字：']):
+                    continue
+                
+                meaningful_lines.append(line)
+            
+            # 去重并保持顺序
+            seen = set()
+            unique_lines = []
+            for line in meaningful_lines:
+                if line not in seen:
+                    unique_lines.append(line)
+                    seen.add(line)
+            
+            return '\n'.join(unique_lines)
+            
+        except Exception as e:
+            logger.error(f"文本格式化失败: {str(e)}")
+            return text
     
     def _fuse_ocr_and_vision_results(self, ocr_text: str, vision_text: str) -> str:
         """
@@ -1305,7 +1381,6 @@ class PDFTextExtractor:
             ocr_engine = kwargs.get('ocr_engine', 'baidu')
             use_vision = kwargs.get('use_vision', False)
             vision_model = kwargs.get('vision_model', 'qwen-vl-plus')
-            extract_formatting = kwargs.get('extract_formatting', False)
             
             logger.info(f"PDF处理参数: use_ocr={use_ocr}, ocr_engine={ocr_engine}, use_vision={use_vision}, vision_model={vision_model}")
             
@@ -1319,16 +1394,13 @@ class PDFTextExtractor:
                 ocr_engine_enum = OCREngineType.BAIDU
             
             # 提取文字
-            if extract_formatting:
-                result = self.extract_text_with_formatting(file_path)
-            else:
-                result = self.extract_text_from_pdf(
-                    file_path, 
-                    use_ocr=use_ocr, 
-                    ocr_engine=ocr_engine_enum,
-                    use_vision=use_vision,
-                    vision_model=vision_model
-                )
+            result = self.extract_text_from_pdf(
+                file_path, 
+                use_ocr=use_ocr, 
+                ocr_engine=ocr_engine_enum,
+                use_vision=use_vision,
+                vision_model=vision_model
+            )
             
             return result
             

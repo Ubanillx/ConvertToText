@@ -211,8 +211,9 @@ python main.py
 | ------------------ | ---------------------------------- | ---- | ---------------- |
 | **健康检查** | `/api/v1/health`                 | GET  | 系统状态检查     |
 | **PDF处理**  | `/api/v1/pdf/extract-text`       | POST | PDF文字提取      |
-| **DOC处理**  | `/api/v1/doc/extract-text`       | POST | DOC/DOCX文字提取 |
-| **OCR识别**  | `/api/v1/ocr/recognize`          | POST | 图片文字识别     |
+| **DOC处理**  | `/api/v1/doc/extract`            | POST | DOC/DOCX文字提取 |
+| **图片处理** | `/api/image/extract-text`        | POST | 图片文件上传文字提取 |
+| **图片URL**  | `/api/image/extract-text-from-url` | POST | 图片URL链接文字提取 |
 | **文件下载** | `/api/v1/download/{file_id}`     | GET  | 结果文件下载     |
 
 ### 使用示例
@@ -241,6 +242,37 @@ with open("document.pdf", "rb") as f:
     )
     result = response.json()
     print(f"提取结果: {result['data']['text']}")
+
+# 3. 图片文件上传文字提取
+with open("image.png", "rb") as f:
+    files = {"file": f}
+    data = {
+        "processing_type": "extract",
+        "output_format": "json",
+        "ocr_engine": "baidu",
+        "use_vision": True
+    }
+    response = requests.post(
+        "http://localhost:8000/api/image/extract-text",
+        files=files,
+        data=data
+    )
+    result = response.json()
+    print(f"图片提取结果: {result}")
+
+# 4. 图片URL链接文字提取
+data = {
+    "url": "https://example.com/document.png",
+    "processing_type": "extract",
+    "output_format": "json",
+    "ocr_engine": "baidu"
+}
+response = requests.post(
+    "http://localhost:8000/api/image/extract-text-from-url",
+    data=data
+)
+result = response.json()
+print(f"URL图片提取结果: {result}")
 ```
 
 #### cURL命令
@@ -253,11 +285,20 @@ curl -X POST "http://localhost:8000/api/v1/pdf/extract-text" \
   -F "use_vision=true" \
   -F "ocr_engine=baidu"
 
-# OCR图片识别
-curl -X POST "http://localhost:8000/api/v1/ocr/recognize" \
-  -F "file=@image.jpg" \
-  -F "engine=baidu" \
-  -F "preprocess=true"
+# 图片文件上传文字提取
+curl -X POST "http://localhost:8000/api/image/extract-text" \
+  -F "file=@image.png" \
+  -F "processing_type=extract" \
+  -F "output_format=json" \
+  -F "ocr_engine=baidu" \
+  -F "use_vision=true"
+
+# 图片URL链接文字提取
+curl -X POST "http://localhost:8000/api/image/extract-text-from-url" \
+  -F "url=https://example.com/document.png" \
+  -F "processing_type=extract" \
+  -F "output_format=json" \
+  -F "ocr_engine=baidu"
 ```
 
 ### 详细API文档

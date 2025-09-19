@@ -68,8 +68,7 @@ async def root():
             "doc": "/api/v1/doc",
             "image": "/api/v1/image", 
             "ocr": "/api/v1/ocr",
-            "download": "/api/v1/download",
-            "cleanup": "/api/v1/cleanup"
+            "download": "/api/v1/download"
         }
     }
 

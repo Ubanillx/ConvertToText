@@ -26,7 +26,7 @@
 ├─────────────────────────────────────────────────────────────┤
 │  API Layer (FastAPI)                                       │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌──────────────┐ │
-│  │   /extract-text │  │  /extract-docx  │  │ /extract-doc │ │
+│  │              /extract              │ │
 │  └─────────────────┘  └─────────────────┘  └──────────────┘ │
 ├─────────────────────────────────────────────────────────────┤
 │  Service Layer                                              │
@@ -249,17 +249,15 @@ graph TD
 
 | 端点 | 方法 | 功能 | 输入 | 输出 |
 |------|------|------|------|------|
-| `/api/v1/doc/extract-text` | POST | 通用文档提取 | 文件 | DocExtractionResult |
-| `/api/v1/doc/extract-docx` | POST | DOCX专用提取 | 文件 | DocExtractionResult |
-| `/api/v1/doc/extract-doc` | POST | DOC专用提取 | 文件 | DocExtractionResult |
+| `/api/v1/doc/extract` | POST | 统一DOC/DOCX文档提取 | 文件 | DocExtractionResult |
 | `/api/v1/doc/health` | GET | 健康检查 | 无 | 状态信息 |
 
 ### 请求/响应格式
 
-#### 通用提取接口
+#### 统一提取接口
 
 ```http
-POST /api/v1/doc/extract-text
+POST /api/v1/doc/extract
 Content-Type: multipart/form-data
 
 {

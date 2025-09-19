@@ -6,7 +6,7 @@ PDF文字提取API接口
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import logging
 from pathlib import Path
 import tempfile
@@ -112,10 +112,9 @@ def _detect_pdf_content_type(file_content: bytes) -> Dict[str, Any]:
 
 
 @router.post("/extract-text")
-async def extract_pdf_text(
+async def extract_pdf_text_from_file(
     file: UploadFile = File(..., description="PDF文件"),
     output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
-    extract_formatting: bool = Form(False, description="是否提取格式信息"),
     ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
     vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
 ):
@@ -123,6 +122,7 @@ async def extract_pdf_text(
     提取PDF文件中的文字
     
     从PDF文档中提取文字内容，支持多种输出格式。系统会自动检测PDF内容类型并选择最佳处理方式。
+    支持文件上传或URL链接两种方式，二选一即可。
     
     **智能处理流程:**
     1. 自动检测PDF是否包含图像
@@ -133,17 +133,18 @@ async def extract_pdf_text(
        - 扫描页面：自动启用OCR识别
     
     **参数说明:**
-    - **file** (UploadFile, 必需): 上传的PDF文件
+    - **file** (UploadFile, 可选): 上传的PDF文件
       - 支持格式: `.pdf`
       - 最大文件大小: 50MB
       - 支持加密PDF（需要密码）
+    - **url** (str, 可选): PDF文件URL链接
+      - 支持HTTP/HTTPS协议
+      - 最大文件大小: 50MB
+      - 自动检测文件类型
     - **output_format** (str, 默认: "json"): 输出格式
       - `"json"`: JSON格式，包含详细的结构化数据
       - `"txt"`: 纯文本格式
       - `"zip"`: 压缩包格式，包含多种格式文件
-    - **extract_formatting** (bool, 默认: False): 是否提取格式信息
-      - `True`: 提取字体、大小、颜色等格式信息
-      - `False`: 仅提取纯文本内容
     - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
       - `"baidu"`: 百度OCR引擎（推荐）
       - `"tesseract"`: Tesseract引擎
@@ -153,19 +154,23 @@ async def extract_pdf_text(
     
     **使用示例:**
     ```bash
-    # 基本文字提取（系统自动检测内容类型）
+    # 通过文件上传提取文字
     curl -X POST "http://localhost:8000/api/pdf/extract-text" \
          -F "file=@document.pdf" \
+         -F "output_format=json"
+    
+    # 通过URL链接提取文字
+    curl -X POST "http://localhost:8000/api/pdf/extract-text" \
+         -F "url=https://example.com/document.pdf" \
          -F "output_format=json"
     
     # 提取格式信息
     curl -X POST "http://localhost:8000/api/pdf/extract-text" \
          -F "file=@formatted_document.pdf" \
-         -F "extract_formatting=true"
     
     # 指定OCR引擎（系统自动判断是否需要OCR）
     curl -X POST "http://localhost:8000/api/pdf/extract-text" \
-         -F "file=@scanned_document.pdf" \
+         -F "url=https://example.com/scanned_document.pdf" \
          -F "ocr_engine=baidu"
     
     # 指定视觉模型（系统自动判断是否需要视觉分析）
@@ -199,6 +204,10 @@ async def extract_pdf_text(
     - `500`: 处理失败或服务器错误
     """
     try:
+        # 验证输入参数：file是必需的
+        if not file:
+            raise HTTPException(status_code=400, detail="必须提供PDF文件")
+        
         # 验证文件类型
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="只支持PDF文件")
@@ -216,7 +225,6 @@ async def extract_pdf_text(
             filename=file.filename,
             processing_type="extract",
             output_format=output_format,
-            extract_formatting=extract_formatting,
             include_images=content_analysis["include_images"],
             use_ocr=content_analysis["use_ocr"],
             ocr_engine=ocr_engine,
@@ -225,14 +233,18 @@ async def extract_pdf_text(
         )
         
         if result['success']:
-            return {
+            response_data = {
                 "success": True,
                 "message": "PDF处理成功",
                 "task_id": result['task_id'],
                 "download_url": result['download_url'],
                 "output_format": output_format,
-                "timestamp": result['created_at'],
-                "content_analysis": {
+                "timestamp": result['created_at']
+            }
+            
+            # 如果是文件上传方式，添加内容分析信息
+            if file and 'content_analysis' in locals():
+                response_data["content_analysis"] = {
                     "has_images": content_analysis["has_images"],
                     "has_native_text": content_analysis["has_native_text"],
                     "total_pages": content_analysis["total_pages"],
@@ -240,7 +252,8 @@ async def extract_pdf_text(
                     "auto_ocr_enabled": content_analysis["use_ocr"],
                     "auto_vision_enabled": content_analysis["use_vision"]
                 }
-            }
+            
+            return response_data
         else:
             raise HTTPException(status_code=500, detail=result['error'])
                 
@@ -253,6 +266,108 @@ async def extract_pdf_text(
 
 
 
+
+
+@router.post("/extract-text-from-url")
+async def extract_pdf_text_from_url(
+    url: str = Form(..., description="PDF文件URL"),
+    output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
+    ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
+    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
+):
+    """
+    从URL提取PDF文件中的文字
+    
+    从URL链接的PDF文档中提取文字内容，支持多种输出格式。系统会自动检测PDF内容类型并选择最佳处理方式。
+    
+    **智能处理流程:**
+    1. 自动检测PDF是否包含图像
+    2. 自动判断是否为扫描文档
+    3. 根据内容类型自动选择处理方式：
+       - 纯文本页面：直接提取原生文字
+       - 包含图像页面：自动启用OCR和视觉模型
+       - 扫描页面：自动启用OCR识别
+    
+    **参数说明:**
+    - **url** (str, 必需): PDF文件URL链接
+      - 支持HTTP/HTTPS协议
+      - 最大文件大小: 50MB
+      - 自动检测文件类型
+    - **output_format** (str, 默认: "json"): 输出格式
+      - `"json"`: JSON格式，包含详细的结构化数据
+      - `"txt"`: 纯文本格式
+      - `"zip"`: 压缩包格式，包含多种格式文件
+    - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
+      - `"baidu"`: 百度OCR引擎（推荐）
+      - `"paddleocr"`: PaddleOCR引擎
+      - `"tesseract"`: Tesseract引擎
+    - **vision_model** (str, 默认: "qwen-vl-plus"): 视觉模型名称
+      - `"qwen-vl-plus"`: 通义千问视觉模型（推荐）
+      - `"qwen-vl-max"`: 通义千问视觉模型（高级版）
+    
+    **使用示例:**
+    
+    ```bash
+    curl -X POST "http://localhost:8000/api/pdf/extract-text-from-url" \
+         -F "url=https://example.com/document.pdf" \
+         -F "output_format=json" \
+         -F "ocr_engine=baidu" \
+         -F "vision_model=qwen-vl-plus"
+    ```
+    
+    **Python示例:**
+    ```python
+    import requests
+    
+    data = {
+        'url': 'https://example.com/document.pdf',
+        'output_format': 'json',
+        'ocr_engine': 'baidu',
+        'vision_model': 'qwen-vl-plus'
+    }
+    response = requests.post(
+        'http://localhost:8000/api/pdf/extract-text-from-url',
+        data=data
+    )
+    ```
+    """
+    try:
+        # 验证URL格式
+        if not url.startswith(('http://', 'https://')):
+            raise HTTPException(status_code=400, detail="URL必须以http://或https://开头")
+        
+        # 使用统一处理服务处理URL
+        result = await unified_processing_service.process_url_upload(
+            url=url,
+            processing_type="extract",
+            output_format=output_format,
+            ocr_engine=ocr_engine,
+            vision_model=vision_model
+        )
+        
+        if result['success']:
+            response_data = {
+                "success": True,
+                "message": "PDF处理成功",
+                "task_id": result['task_id'],
+                "download_url": result['download_url'],
+                "output_format": output_format,
+                "timestamp": result['created_at']
+            }
+            
+            # 如果URL方式处理，添加文件信息
+            if 'file_info' in result:
+                response_data['file_info'] = result['file_info']
+            
+            return JSONResponse(content=response_data)
+        else:
+            raise HTTPException(status_code=500, detail=result.get('error', 'PDF处理失败'))
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"PDF URL处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"PDF处理失败: {str(e)}")
 
 
 @router.get("/health")

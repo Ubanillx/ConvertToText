@@ -6,7 +6,7 @@ DOC/DOCX文字提取API接口
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import JSONResponse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 import logging
 from pathlib import Path
 import tempfile
@@ -78,26 +78,30 @@ def _detect_doc_content_type(file_content: bytes, filename: str) -> DocContentAn
         )
 
 
-@router.post("/extract-text")
-async def extract_doc_text(
+@router.post("/extract")
+async def extract_doc_text_from_file(
     file: UploadFile = File(..., description="DOC/DOCX文件"),
     output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
-    extract_formatting: bool = Form(False, description="是否提取格式信息"),
+    processing_type: str = Form(default="extract", description="处理类型: extract, extract_with_images"),
+    use_ocr: bool = Form(default=False, description="是否使用OCR"),
     ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
-    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
+    use_vision: bool = Form(default=False, description="是否使用视觉模型"),
+    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称"),
+    extract_images: bool = Form(default=True, description="是否提取图像")
 ):
     """
-    提取DOC/DOCX文件中的文字
+    从上传的DOC/DOCX文件中提取文字
     
-    从DOC/DOCX文档中提取文字内容，支持多种输出格式。系统会自动检测文档内容类型并选择最佳处理方式。
+    从上传的DOC/DOCX文档中提取文字内容，支持多种输出格式。系统会自动检测文档类型和内容特征，并选择最佳的处理方式。
     
     **智能处理流程:**
     1. 自动检测文档类型（DOC/DOCX）
-    2. 自动检测是否包含图像
+    2. 自动检测是否包含图像和原生文本
     3. 根据内容类型自动选择处理方式：
        - 纯文本文档：直接提取原生文字
        - 包含图像文档：自动启用OCR和视觉模型
        - 扫描文档：自动启用OCR识别
+       - 混合内容文档：结合原生文本提取和图像识别
     
     **参数说明:**
     - **file** (UploadFile, 必需): 上传的DOC/DOCX文件
@@ -107,37 +111,48 @@ async def extract_doc_text(
       - `"json"`: JSON格式，包含详细的结构化数据
       - `"txt"`: 纯文本格式
       - `"zip"`: 压缩包格式，包含多种格式文件
-    - **extract_formatting** (bool, 默认: False): 是否提取格式信息
-      - `True`: 提取字体、大小、颜色等格式信息
-      - `False`: 仅提取纯文本内容
+    - **processing_type** (str, 默认: "extract"): 处理类型
+      - `"extract"`: 仅提取文字内容
+      - `"extract_with_images"`: 提取文字和图像
+    - **use_ocr** (bool, 默认: False): 是否使用OCR
     - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
       - `"baidu"`: 百度OCR引擎（推荐）
       - `"tesseract"`: Tesseract引擎
+    - **use_vision** (bool, 默认: False): 是否使用视觉模型
     - **vision_model** (str, 默认: "qwen-vl-plus"): 视觉模型名称
       - `"qwen-vl-plus"`: 增强版视觉模型
       - `"qwen-vl-max"`: 最大版视觉模型
+    - **extract_images** (bool, 默认: True): 是否提取图像
     
     **使用示例:**
     ```bash
-    # 基本文字提取（系统自动检测内容类型）
-    curl -X POST "http://localhost:8000/api/doc/extract-text" \
+    # 基本文字提取
+    curl -X POST "http://localhost:8000/api/doc/extract" \
          -F "file=@document.docx" \
          -F "output_format=json"
     
-    # 提取格式信息
-    curl -X POST "http://localhost:8000/api/doc/extract-text" \
-         -F "file=@formatted_document.docx" \
-         -F "extract_formatting=true"
+    # 处理DOC文件
+    curl -X POST "http://localhost:8000/api/doc/extract" \
+         -F "file=@document.doc" \
+         -F "output_format=json"
     
-    # 指定OCR引擎（系统自动判断是否需要OCR）
-    curl -X POST "http://localhost:8000/api/doc/extract-text" \
+    # 启用OCR处理
+    curl -X POST "http://localhost:8000/api/doc/extract" \
          -F "file=@scanned_document.docx" \
+         -F "use_ocr=true" \
          -F "ocr_engine=baidu"
     
-    # 指定视觉模型（系统自动判断是否需要视觉分析）
-    curl -X POST "http://localhost:8000/api/doc/extract-text" \
+    # 启用视觉模型处理
+    curl -X POST "http://localhost:8000/api/doc/extract" \
          -F "file=@complex_document.docx" \
+         -F "use_vision=true" \
          -F "vision_model=qwen-vl-plus"
+    
+    # 提取文字和图像
+    curl -X POST "http://localhost:8000/api/doc/extract" \
+         -F "file=@document_with_images.docx" \
+         -F "processing_type=extract_with_images" \
+         -F "extract_images=true"
     ```
     
     **响应示例:**
@@ -165,6 +180,10 @@ async def extract_doc_text(
     - `500`: 处理失败或服务器错误
     """
     try:
+        # 验证输入参数：file是必需的
+        if not file:
+            raise HTTPException(status_code=400, detail="必须提供DOC/DOCX文件")
+        
         # 验证文件类型
         if not file.filename:
             raise HTTPException(status_code=400, detail="文件名不能为空")
@@ -187,26 +206,29 @@ async def extract_doc_text(
         result = await unified_processing_service.process_file_upload(
             file_content=file_content,
             filename=file.filename,
-            processing_type="extract",
+            processing_type=processing_type,
             output_format=output_format,
             doc_type=doc_type,
-            extract_formatting=extract_formatting,
-            include_images=content_analysis.include_images,
-            use_ocr=content_analysis.use_ocr,
+            include_images=extract_images,
+            use_ocr=use_ocr,
             ocr_engine=ocr_engine,
-            use_vision=content_analysis.use_vision,
+            use_vision=use_vision,
             vision_model=vision_model
         )
         
         if result['success']:
-            return {
+            response_data = {
                 "success": True,
                 "message": "DOC文档处理成功",
                 "task_id": result['task_id'],
                 "download_url": result['download_url'],
                 "output_format": output_format,
-                "timestamp": result['created_at'],
-                "content_analysis": {
+                "timestamp": result['created_at']
+            }
+            
+            # 如果是文件上传方式，添加内容分析信息
+            if file and 'content_analysis' in locals():
+                response_data["content_analysis"] = {
                     "has_images": content_analysis.has_images,
                     "has_native_text": content_analysis.has_native_text,
                     "total_pages": content_analysis.total_pages,
@@ -214,7 +236,17 @@ async def extract_doc_text(
                     "auto_ocr_enabled": content_analysis.use_ocr,
                     "auto_vision_enabled": content_analysis.use_vision
                 }
-            }
+            elif url:
+                # URL方式添加文件信息
+                file_info = result.get('file_info', {})
+                response_data["file_info"] = {
+                    "filename": file_info.get('filename', ''),
+                    "file_size": file_info.get('file_size', 0),
+                    "source": file_info.get('source', 'url'),
+                    "original_url": file_info.get('original_url', url)
+                }
+            
+            return response_data
         else:
             raise HTTPException(status_code=500, detail=result['error'])
                 
@@ -225,179 +257,142 @@ async def extract_doc_text(
         raise HTTPException(status_code=500, detail=f"DOC处理失败: {str(e)}")
 
 
-@router.post("/extract-docx")
-async def extract_docx_text(
-    file: UploadFile = File(..., description="DOCX文件"),
-    output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
-    extract_formatting: bool = Form(False, description="是否提取格式信息"),
-    ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
-    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
-):
-    """
-    专门提取DOCX文件中的文字
-    
-    针对DOCX格式文档的专用接口，提供更精确的格式支持。
-    
-    **参数说明:**
-    - **file** (UploadFile, 必需): 上传的DOCX文件
-    - **output_format** (str, 默认: "json"): 输出格式
-    - **extract_formatting** (bool, 默认: False): 是否提取格式信息
-    - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
-    - **vision_model** (str, 默认: "qwen-vl-plus"): 视觉模型名称
-    
-    **使用示例:**
-    ```bash
-    # 提取DOCX文档文字
-    curl -X POST "http://localhost:8000/api/doc/extract-docx" \
-         -F "file=@document.docx" \
-         -F "extract_formatting=true"
-    ```
-    """
-    try:
-        # 验证文件类型
-        if not file.filename or not file.filename.lower().endswith('.docx'):
-            raise HTTPException(status_code=400, detail="只支持DOCX文件")
-        
-        # 读取文件内容
-        file_content = await file.read()
-        
-        # 自动检测DOCX内容类型
-        content_analysis = _detect_doc_content_type(file_content, file.filename)
-        logger.info(f"DOCX内容检测结果: {content_analysis}")
-        
-        # 使用统一处理服务
-        result = await unified_processing_service.process_file_upload(
-            file_content=file_content,
-            filename=file.filename,
-            processing_type="extract",
-            output_format=output_format,
-            doc_type="docx",
-            extract_formatting=extract_formatting,
-            include_images=content_analysis.include_images,
-            use_ocr=content_analysis.use_ocr,
-            ocr_engine=ocr_engine,
-            use_vision=content_analysis.use_vision,
-            vision_model=vision_model
-        )
-        
-        if result['success']:
-            return {
-                "success": True,
-                "message": "DOCX文档处理成功",
-                "task_id": result['task_id'],
-                "download_url": result['download_url'],
-                "output_format": output_format,
-                "timestamp": result['created_at'],
-                "content_analysis": {
-                    "has_images": content_analysis.has_images,
-                    "has_native_text": content_analysis.has_native_text,
-                    "total_pages": content_analysis.total_pages,
-                    "detection_confidence": content_analysis.detection_confidence,
-                    "auto_ocr_enabled": content_analysis.use_ocr,
-                    "auto_vision_enabled": content_analysis.use_vision
-                }
-            }
-        else:
-            raise HTTPException(status_code=500, detail=result['error'])
-                
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"DOCX处理失败: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"DOCX处理失败: {str(e)}")
 
 
-@router.post("/extract-doc")
-async def extract_doc_text(
-    file: UploadFile = File(..., description="DOC文件"),
+@router.post("/extract-from-url")
+async def extract_doc_text_from_url(
+    url: str = Form(..., description="DOC/DOCX文件URL"),
     output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
-    extract_formatting: bool = Form(False, description="是否提取格式信息"),
+    processing_type: str = Form(default="extract", description="处理类型: extract, extract_with_images"),
+    use_ocr: bool = Form(default=False, description="是否使用OCR"),
     ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
-    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
+    use_vision: bool = Form(default=False, description="是否使用视觉模型"),
+    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称"),
+    extract_images: bool = Form(default=True, description="是否提取图像")
 ):
     """
-    专门提取DOC文件中的文字
+    从URL提取DOC/DOCX文件中的文字
     
-    针对DOC格式文档的专用接口，使用docx2txt进行文本提取。
+    从URL链接的DOC/DOCX文档中提取文字内容，支持多种输出格式。系统会自动检测文档类型和内容特征，并选择最佳的处理方式。
+    
+    **智能处理流程:**
+    1. 自动检测文档类型（DOC/DOCX）
+    2. 自动检测是否包含图像和原生文本
+    3. 根据内容类型自动选择处理方式：
+       - 纯文本文档：直接提取原生文字
+       - 包含图像文档：自动启用OCR和视觉模型
+       - 扫描文档：自动启用OCR识别
+       - 混合内容文档：结合原生文本提取和图像识别
     
     **参数说明:**
-    - **file** (UploadFile, 必需): 上传的DOC文件
+    - **url** (str, 必需): DOC/DOCX文件URL链接
+      - 支持HTTP/HTTPS协议
+      - 最大文件大小: 50MB
+      - 自动检测文件类型
     - **output_format** (str, 默认: "json"): 输出格式
-    - **extract_formatting** (bool, 默认: False): 是否提取格式信息
+      - `"json"`: JSON格式，包含详细的结构化数据
+      - `"txt"`: 纯文本格式
+      - `"zip"`: 压缩包格式，包含多种格式文件
+    - **processing_type** (str, 默认: "extract"): 处理类型
+      - `"extract"`: 仅提取文字内容
+      - `"extract_with_images"`: 提取文字和图像
+    - **use_ocr** (bool, 默认: False): 是否使用OCR
     - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
+      - `"baidu"`: 百度OCR引擎（推荐）
+      - `"tesseract"`: Tesseract引擎
+    - **use_vision** (bool, 默认: False): 是否使用视觉模型
     - **vision_model** (str, 默认: "qwen-vl-plus"): 视觉模型名称
+      - `"qwen-vl-plus"`: 增强版视觉模型
+      - `"qwen-vl-max"`: 最大版视觉模型
+    - **extract_images** (bool, 默认: True): 是否提取图像
     
     **使用示例:**
+    
     ```bash
-    # 提取DOC文档文字
-    curl -X POST "http://localhost:8000/api/doc/extract-doc" \
-         -F "file=@document.doc" \
+    # 基本文字提取
+    curl -X POST "http://localhost:8000/api/doc/extract-from-url" \
+         -F "url=https://example.com/document.docx" \
          -F "output_format=json"
+    
+    # 启用OCR处理
+    curl -X POST "http://localhost:8000/api/doc/extract-from-url" \
+         -F "url=https://example.com/scanned_document.docx" \
+         -F "use_ocr=true" \
+         -F "ocr_engine=baidu"
+    
+    # 启用视觉模型处理
+    curl -X POST "http://localhost:8000/api/doc/extract-from-url" \
+         -F "url=https://example.com/complex_document.docx" \
+         -F "use_vision=true" \
+         -F "vision_model=qwen-vl-plus"
+    ```
+    
+    **Python示例:**
+    ```python
+    import requests
+    
+    data = {
+        'url': 'https://example.com/document.docx',
+        'output_format': 'json',
+        'use_ocr': True,
+        'ocr_engine': 'baidu',
+        'use_vision': True,
+        'vision_model': 'qwen-vl-plus'
+    }
+    response = requests.post(
+        'http://localhost:8000/api/doc/extract-from-url',
+        data=data
+    )
     ```
     """
     try:
-        # 验证文件类型
-        if not file.filename or not file.filename.lower().endswith('.doc'):
-            raise HTTPException(status_code=400, detail="只支持DOC文件")
+        # 验证URL格式
+        if not url.startswith(('http://', 'https://')):
+            raise HTTPException(status_code=400, detail="URL必须以http://或https://开头")
         
-        # 读取文件内容
-        file_content = await file.read()
-        
-        # 自动检测DOC内容类型
-        content_analysis = _detect_doc_content_type(file_content, file.filename)
-        logger.info(f"DOC内容检测结果: {content_analysis}")
-        
-        # 使用统一处理服务
-        result = await unified_processing_service.process_file_upload(
-            file_content=file_content,
-            filename=file.filename,
-            processing_type="extract",
+        # 使用统一处理服务处理URL
+        result = await unified_processing_service.process_url_upload(
+            url=url,
+            processing_type=processing_type,
             output_format=output_format,
-            doc_type="doc",
-            extract_formatting=extract_formatting,
-            include_images=content_analysis.include_images,
-            use_ocr=content_analysis.use_ocr,
             ocr_engine=ocr_engine,
-            use_vision=content_analysis.use_vision,
             vision_model=vision_model
         )
         
         if result['success']:
-            return {
+            response_data = {
                 "success": True,
                 "message": "DOC文档处理成功",
                 "task_id": result['task_id'],
                 "download_url": result['download_url'],
                 "output_format": output_format,
-                "timestamp": result['created_at'],
-                "content_analysis": {
-                    "has_images": content_analysis.has_images,
-                    "has_native_text": content_analysis.has_native_text,
-                    "total_pages": content_analysis.total_pages,
-                    "detection_confidence": content_analysis.detection_confidence,
-                    "auto_ocr_enabled": content_analysis.use_ocr,
-                    "auto_vision_enabled": content_analysis.use_vision
-                }
+                "timestamp": result['created_at']
             }
+            
+            # 如果URL方式处理，添加文件信息
+            if 'file_info' in result:
+                response_data['file_info'] = result['file_info']
+            
+            return JSONResponse(content=response_data)
         else:
-            raise HTTPException(status_code=500, detail=result['error'])
-                
+            raise HTTPException(status_code=500, detail=result.get('error', 'DOC处理失败'))
+            
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"DOC处理失败: {str(e)}")
+        logger.error(f"DOC URL处理失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"DOC处理失败: {str(e)}")
 
 
 @router.get("/health")
 async def doc_service_health():
     """
-    DOC服务健康检查
+    DOC/DOCX统一服务健康检查
     
-    检查DOC/DOCX文字提取服务的运行状态和功能可用性。
+    检查统一的DOC/DOCX文字提取服务的运行状态和功能可用性。
     
     **检查项目:**
-    - DOC/DOCX处理引擎状态
+    - 统一DOC/DOCX处理引擎状态
     - OCR引擎可用性
     - 视觉模型连接状态
     - Qwen-VL模型状态
@@ -405,7 +400,7 @@ async def doc_service_health():
     
     **使用示例:**
     ```bash
-    # 检查DOC服务健康状态
+    # 检查DOC/DOCX统一服务健康状态
     curl -X GET "http://localhost:8000/api/doc/health"
     ```
     
@@ -413,9 +408,10 @@ async def doc_service_health():
     ```json
     {
         "status": "healthy",
-        "service": "DOC/DOCX文字提取服务",
+        "service": "DOC/DOCX统一文字提取服务",
         "version": "1.0.0",
         "features": {
+            "unified_doc_processing": true,
             "docx_processing": true,
             "doc_processing": true,
             "ocr": true,
@@ -432,6 +428,7 @@ async def doc_service_health():
     - `"unhealthy"`: 服务异常
     
     **功能状态:**
+    - `unified_doc_processing`: 统一DOC/DOCX处理功能是否可用
     - `docx_processing`: DOCX处理功能是否可用
     - `doc_processing`: DOC处理功能是否可用
     - `ocr`: OCR引擎是否可用
@@ -466,9 +463,10 @@ async def doc_service_health():
         
         return {
             "status": status,
-            "service": "DOC/DOCX文字提取服务",
+            "service": "DOC/DOCX统一文字提取服务",
             "version": "1.0.0",
             "features": {
+                "unified_doc_processing": docx_available and doc_available,
                 "docx_processing": docx_available,
                 "doc_processing": doc_available,
                 "ocr": True,

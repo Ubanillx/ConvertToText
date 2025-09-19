@@ -13,6 +13,7 @@ from app.services.file_storage_service import file_storage_service
 from app.services.pdf_extractor import pdf_extractor
 from app.services.doc_extractor import doc_extractor
 from app.services.image_processing_service import image_processing_service
+from app.services.url_download_service import url_download_service
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
@@ -26,6 +27,7 @@ class UnifiedProcessingService:
         self.pdf_processor = pdf_extractor
         self.doc_processor = doc_extractor
         self.image_processor = image_processing_service
+        self.url_downloader = url_download_service
     
     async def process_file_upload(
         self,
@@ -87,6 +89,70 @@ class UnifiedProcessingService:
             
         except Exception as e:
             logger.error(f"处理文件上传失败: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'created_at': datetime.now().isoformat()
+            }
+    
+    async def process_url_upload(
+        self,
+        url: str,
+        processing_type: str = "extract",
+        output_format: str = "json",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """
+        处理URL文件上传
+        
+        Args:
+            url: 文件URL
+            processing_type: 处理类型 (仅支持extract)
+            output_format: 输出格式 (json, txt, zip)
+            **kwargs: 其他参数
+            
+        Returns:
+            处理结果，包含下载URL
+        """
+        try:
+            # 生成任务ID
+            task_id = self.file_storage.generate_task_id()
+            
+            # 从URL下载文件
+            file_info = await self.url_downloader.download_file_from_url(url, task_id)
+            
+            # 根据文件类型选择处理方式
+            file_type = file_info['file_type']
+            
+            if file_type == 'pdf':
+                result = await self._process_pdf_file(file_info, processing_type, **kwargs)
+            elif file_type in ['doc', 'docx']:
+                result = await self._process_doc_file(file_info, processing_type, **kwargs)
+            elif file_type == 'image':
+                result = await self._process_image_file(file_info, processing_type, **kwargs)
+            elif file_type == 'text':
+                result = await self._process_text_file(file_info, processing_type, **kwargs)
+            else:
+                raise ValueError(f"不支持的文件类型: {file_type}")
+            
+            # 保存处理结果并生成下载URL
+            download_url = self.file_storage.save_processing_result(
+                task_id, result, output_format
+            )
+            
+            # 返回统一格式的结果
+            return {
+                'success': True,
+                'task_id': task_id,
+                'file_info': file_info,
+                'processing_type': processing_type,
+                'result': result,
+                'download_url': download_url,
+                'created_at': datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"处理URL文件上传失败: {str(e)}")
             return {
                 'success': False,
                 'error': str(e),

@@ -6,7 +6,7 @@
 
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
-from typing import Optional
+from typing import Optional, Union
 import logging
 from datetime import datetime
 
@@ -32,6 +32,7 @@ async def extract_image_text(
     提取图片文件中的文字
     
     支持多种图片格式的文字提取，包括OCR识别和智能分析功能。
+    通过文件上传方式处理图片。
     
     **参数说明:**
     - **file** (UploadFile, 必需): 上传的图片文件
@@ -56,7 +57,7 @@ async def extract_image_text(
     
     **使用示例:**
     ```bash
-    # 基本文字提取
+    # 通过文件上传提取文字
     curl -X POST "http://localhost:8000/api/image/extract-text" \
          -F "file=@document.png" \
          -F "processing_type=extract" \
@@ -115,7 +116,7 @@ async def extract_image_text(
         )
         
         if result['success']:
-            return {
+            response_data = {
                 "success": True,
                 "message": "图片处理成功",
                 "task_id": result['task_id'],
@@ -124,6 +125,8 @@ async def extract_image_text(
                 "output_format": output_format,
                 "timestamp": result['created_at']
             }
+            
+            return response_data
         else:
             raise HTTPException(status_code=500, detail=result['error'])
                 
@@ -134,6 +137,133 @@ async def extract_image_text(
         raise HTTPException(status_code=500, detail=f"图片处理失败: {str(e)}")
 
 
+@router.post("/extract-text-from-url")
+async def extract_image_text_from_url(
+    url: str = Form(..., description="图片文件URL"),
+    processing_type: str = Form(default="extract", description="处理类型: extract, analyze"),
+    output_format: str = Form(default="json", description="输出格式: json, txt, zip"),
+    ocr_engine: str = Form(default="baidu", description="OCR引擎类型"),
+    use_vision: bool = Form(False, description="是否使用Qwen-VL多模态模型"),
+    vision_model: str = Form(default="qwen-vl-plus", description="视觉模型名称")
+):
+    """
+    从URL提取图片文件中的文字
+    
+    支持多种图片格式的文字提取，包括OCR识别和智能分析功能。
+    通过URL链接方式处理图片。
+    
+    **参数说明:**
+    - **url** (str, 必需): 图片文件URL链接
+      - 支持HTTP/HTTPS协议
+      - 最大文件大小: 10MB
+      - 自动检测文件类型
+    - **processing_type** (str, 默认: "extract"): 处理类型
+      - `"extract"`: 仅提取文字
+      - `"analyze"`: 提取文字并进行智能分析
+    - **output_format** (str, 默认: "json"): 输出格式
+      - `"json"`: JSON格式，包含详细的结构化数据
+      - `"txt"`: 纯文本格式
+      - `"zip"`: 压缩包格式，包含多种格式文件
+    - **ocr_engine** (str, 默认: "baidu"): OCR引擎类型
+      - `"baidu"`: 百度OCR引擎（推荐，支持中英文）
+      - `"tesseract"`: Tesseract引擎
+    - **use_vision** (bool, 默认: False): 是否使用Qwen-VL多模态模型
+      - `True`: 使用AI视觉模型进行智能理解
+      - `False`: 仅使用传统OCR识别
+    - **vision_model** (str, 默认: "qwen-vl-plus"): 视觉模型名称
+      - `"qwen-vl-plus"`: 增强版视觉模型
+      - `"qwen-vl-max"`: 最大版视觉模型
+    
+    **使用示例:**
+    ```bash
+    # 通过URL链接提取文字
+    curl -X POST "http://localhost:8000/api/image/extract-text-from-url" \
+         -F "url=https://example.com/document.png" \
+         -F "processing_type=extract" \
+         -F "output_format=json"
+    
+    # 使用AI视觉模型进行智能分析
+    curl -X POST "http://localhost:8000/api/image/extract-text-from-url" \
+         -F "url=https://example.com/complex_diagram.png" \
+         -F "processing_type=analyze" \
+         -F "use_vision=true" \
+         -F "vision_model=qwen-vl-plus"
+    
+    # 使用百度OCR引擎提取文字
+    curl -X POST "http://localhost:8000/api/image/extract-text-from-url" \
+         -F "url=https://example.com/chinese_text.png" \
+         -F "processing_type=extract" \
+         -F "ocr_engine=baidu" \
+         -F "output_format=txt"
+    ```
+    
+    **响应示例:**
+    ```json
+    {
+        "success": true,
+        "message": "图片处理成功",
+        "task_id": "task_20241201_143022_abc123",
+        "download_url": "http://localhost:8000/api/download/file/extracted_text_20241201_143022.json",
+        "processing_type": "extract",
+        "output_format": "json",
+        "file_info": {
+            "filename": "document.png",
+            "file_size": 1024000,
+            "source": "url",
+            "original_url": "https://example.com/document.png"
+        },
+        "timestamp": "2024-12-01T14:30:22"
+    }
+    ```
+    
+    **错误码:**
+    - `400`: 不支持的URL格式或参数错误
+    - `500`: 处理失败或服务器错误
+    """
+    try:
+        # 验证URL格式
+        if not url.startswith(('http://', 'https://')):
+            raise HTTPException(status_code=400, detail="URL必须以http://或https://开头")
+        
+        # 使用统一处理服务处理URL
+        result = await unified_processing_service.process_url_upload(
+            url=url,
+            processing_type=processing_type,
+            output_format=output_format,
+            ocr_engine=ocr_engine,
+            use_vision=use_vision,
+            vision_model=vision_model
+        )
+        
+        if result['success']:
+            response_data = {
+                "success": True,
+                "message": "图片处理成功",
+                "task_id": result['task_id'],
+                "download_url": result['download_url'],
+                "processing_type": processing_type,
+                "output_format": output_format,
+                "timestamp": result['created_at']
+            }
+            
+            # 添加文件信息
+            file_info = result.get('file_info', {})
+            response_data["file_info"] = {
+                "filename": file_info.get('filename', ''),
+                "file_size": file_info.get('file_size', 0),
+                "source": file_info.get('source', 'url'),
+                "original_url": file_info.get('original_url', url)
+            }
+            
+            return response_data
+        else:
+            raise HTTPException(status_code=500, detail=result['error'])
+                
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"图片URL处理失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"图片URL处理失败: {str(e)}")
 
 
 @router.get("/health")

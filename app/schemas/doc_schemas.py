@@ -104,17 +104,27 @@ class DocExtractionResult(BaseModel):
     processing_time: Optional[float] = Field(None, description="处理时间（秒）")
 
 
-class DocProcessingRequest(BaseModel):
-    """DOC处理请求"""
-    file_path: str = Field(..., description="文件路径")
-    doc_type: DocType = Field(..., description="文档类型")
-    processing_type: DocProcessingType = Field(DocProcessingType.EXTRACT, description="处理类型")
-    use_ocr: bool = Field(False, description="是否使用OCR")
-    ocr_engine: str = Field("baidu", description="OCR引擎")
-    use_vision: bool = Field(False, description="是否使用视觉模型")
-    vision_model: str = Field("qwen-vl-plus", description="视觉模型")
-    extract_formatting: bool = Field(False, description="是否提取格式信息")
-    extract_images: bool = Field(True, description="是否提取图像")
+class DocFileUploadRequest(BaseModel):
+    """DOC文件上传请求"""
+    output_format: str = Field(default="json", description="输出格式: json, txt, zip")
+    processing_type: str = Field(default="extract", description="处理类型: extract, extract_with_images")
+    use_ocr: bool = Field(default=False, description="是否使用OCR")
+    ocr_engine: str = Field(default="baidu", description="OCR引擎类型")
+    use_vision: bool = Field(default=False, description="是否使用视觉模型")
+    vision_model: str = Field(default="qwen-vl-plus", description="视觉模型名称")
+    extract_images: bool = Field(default=True, description="是否提取图像")
+
+
+class DocUrlRequest(BaseModel):
+    """DOC URL请求"""
+    url: str = Field(..., description="DOC/DOCX文件URL")
+    output_format: str = Field(default="json", description="输出格式: json, txt, zip")
+    processing_type: str = Field(default="extract", description="处理类型: extract, extract_with_images")
+    use_ocr: bool = Field(default=False, description="是否使用OCR")
+    ocr_engine: str = Field(default="baidu", description="OCR引擎类型")
+    use_vision: bool = Field(default=False, description="是否使用视觉模型")
+    vision_model: str = Field(default="qwen-vl-plus", description="视觉模型名称")
+    extract_images: bool = Field(default=True, description="是否提取图像")
 
 
 class DocProcessingResponse(BaseModel):

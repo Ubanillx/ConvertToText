@@ -98,11 +98,19 @@ class PDFInfo(BaseModel):
     page_count: int = Field(..., description="页面数量")
 
 
-class PDFUploadRequest(BaseModel):
-    """PDF上传请求"""
-    file_path: str = Field(..., description="PDF文件路径")
-    extract_formatting: bool = Field(False, description="是否提取格式信息")
-    include_images: bool = Field(True, description="是否包含图像信息")
+class PDFFileUploadRequest(BaseModel):
+    """PDF文件上传请求"""
+    output_format: str = Field(default="json", description="输出格式: json, txt, zip")
+    ocr_engine: str = Field(default="baidu", description="OCR引擎类型")
+    vision_model: str = Field(default="qwen-vl-plus", description="视觉模型名称")
+
+
+class PDFUrlRequest(BaseModel):
+    """PDF URL请求"""
+    url: str = Field(..., description="PDF文件URL")
+    output_format: str = Field(default="json", description="输出格式: json, txt, zip")
+    ocr_engine: str = Field(default="baidu", description="OCR引擎类型")
+    vision_model: str = Field(default="qwen-vl-plus", description="视觉模型名称")
 
 
 class PDFExtractionResponse(BaseModel):

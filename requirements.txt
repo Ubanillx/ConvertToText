@@ -7,6 +7,8 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 python-dotenv==1.0.0
 httpx==0.25.2
+aiohttp==3.9.1
+aiofiles==23.2.1
 pytest==7.4.3
 pytest-asyncio==0.21.1
 black==23.11.0
@@ -40,9 +42,10 @@ latex2mathml>=3.76.0
 
 # DOC/DOCX文档处理依赖
 python-docx>=0.8.11
-python-docx2txt>=0.8
-antiword>=0.37
-catdoc>=0.95
+docx2txt>=0.8
+# 注意：以下依赖在macOS上可能无法通过pip安装，需要系统级安装
+# antiword>=0.37  # 需要 brew install antiword
+# catdoc>=0.95    # 需要 brew install catdoc
 
 # 注意：以下依赖在macOS上可能有问题，已注释
 # PP-StructureV3文档解析依赖
